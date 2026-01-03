@@ -20,6 +20,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@grammyjs/conversations": "^2.1.1",
     "dotenv": "^17.2.3",
     "grammy": "^1.39.2",
     "pg": "^8.16.3",
