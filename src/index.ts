@@ -8,6 +8,7 @@ import { rsvpConversation } from "./conversations/rsvp.js";
 import { handleInlineQuery } from "./handlers/inline.js";
 import { handleCallbackQuery } from "./handlers/callbacks.js";
 import { sendEventDetails } from "./handlers/details.js";
+import { pool } from "./db/index.js";
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -70,6 +71,18 @@ bot.on("inline_query", handleInlineQuery);
 
 // Callback query handler
 bot.on("callback_query:data", handleCallbackQuery);
+
+// Graceful shutdown
+async function shutdown(signal: string) {
+  console.log(`\n${signal} received, shutting down gracefully...`);
+  bot.stop();
+  await pool.end();
+  console.log("Shutdown complete");
+  process.exit(0);
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 bot.start();
 console.log("Bot started");
