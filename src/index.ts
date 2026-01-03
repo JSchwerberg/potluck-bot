@@ -36,8 +36,16 @@ bot.command("start", async (ctx) => {
   }
 
   if (typeof payload === "string" && payload.startsWith("details_")) {
-    const eventId = payload.replace("details_", "");
-    await sendEventDetails(ctx, eventId);
+    // Parse eventId and token from payload like "details_uuid_token"
+    const data = payload.replace("details_", "");
+    const lastUnderscore = data.lastIndexOf("_");
+    if (lastUnderscore === -1) {
+      await ctx.reply("Invalid link.");
+      return;
+    }
+    const eventId = data.substring(0, lastUnderscore);
+    const token = data.substring(lastUnderscore + 1);
+    await sendEventDetails(ctx, eventId, token);
     return;
   }
 

@@ -1,14 +1,18 @@
 import type { BotContext } from "../context.js";
-import { getEventById } from "../db/events.js";
+import { getEventByIdAndToken } from "../db/events.js";
 import { getRsvpsForEvent, getDishesForEvent } from "../db/rsvps.js";
 import { getUsersByIds } from "../db/users.js";
 import { FormattedString } from "../utils/format.js";
 import type { Rsvp, DishWithAllergens, User } from "../types.js";
 
-export async function sendEventDetails(ctx: BotContext, eventId: string) {
-  const event = await getEventById(eventId);
+export async function sendEventDetails(
+  ctx: BotContext,
+  eventId: string,
+  token: string
+) {
+  const event = await getEventByIdAndToken(eventId, token);
   if (!event) {
-    await ctx.reply("Event not found.");
+    await ctx.reply("Event not found or invalid link.");
     return;
   }
 

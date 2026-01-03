@@ -40,8 +40,8 @@ export function buildEventCard(
   const formatted = FormattedString.join(parts, "\n");
 
   const keyboard = new InlineKeyboard()
-    .text("RSVP", `rsvp_${event.id}`)
-    .text("View Details", `details_${event.id}`);
+    .text("RSVP", `rsvp_${event.id}_${event.share_token}`)
+    .text("View Details", `details_${event.id}_${event.share_token}`);
 
   return { text: formatted.text, entities: formatted.entities, keyboard };
 }
@@ -75,8 +75,8 @@ export async function handleInlineQuery(ctx: BotContext) {
           entities: entities,
         },
         reply_markup: new InlineKeyboard()
-          .text("RSVP", `rsvp_${event.id}`)
-          .text("View Details", `details_${event.id}`),
+          .text("RSVP", `rsvp_${event.id}_${event.share_token}`)
+          .text("View Details", `details_${event.id}_${event.share_token}`),
       };
     })
   );

@@ -130,8 +130,8 @@ export async function createEventConversation(
   );
 
   const adminKeyboard = new InlineKeyboard()
-    .text("Edit", `edit_${event.id}`)
-    .text("Share", `share_${event.id}`);
+    .text("Edit", `edit_${event.id}_${event.share_token}`)
+    .text("Share", `share_${event.id}_${event.share_token}`);
 
   await ctx.reply(summary.text, {
     reply_markup: adminKeyboard,

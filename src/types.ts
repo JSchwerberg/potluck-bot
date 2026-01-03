@@ -19,6 +19,7 @@ export interface Event {
   allow_guests: boolean;
   food_mode: FoodMode;
   status: EventStatus;
+  share_token: string;
   created_at: Date;
   updated_at: Date;
 }

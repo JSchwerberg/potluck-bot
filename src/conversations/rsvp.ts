@@ -1,5 +1,5 @@
 import { InlineKeyboard } from "grammy";
-import { getEventById } from "../db/events.js";
+import { getEventByIdAndToken } from "../db/events.js";
 import { upsertRsvp, addDish, getAttendeeCount, getAllAllergens, getRsvp } from "../db/rsvps.js";
 import { upsertUser } from "../db/users.js";
 import { fmt, bold, italic, FormattedString } from "../utils/format.js";
@@ -7,6 +7,19 @@ import { DISH_CATEGORIES, type RsvpStatus } from "../types.js";
 import type { BotContext, BotConversation } from "../context.js";
 
 const MAX_GUESTS = 20;
+
+// Parse event ID and token from payload like "rsvp_uuid_token"
+function parseEventPayload(payload: string): { eventId: string; token: string } | null {
+  const data = payload.replace("rsvp_", "");
+  const lastUnderscore = data.lastIndexOf("_");
+  if (lastUnderscore === -1) return null;
+  
+  const eventId = data.substring(0, lastUnderscore);
+  const token = data.substring(lastUnderscore + 1);
+  
+  if (!eventId || !token) return null;
+  return { eventId, token };
+}
 
 export async function rsvpConversation(
   conversation: BotConversation,
@@ -18,18 +31,24 @@ export async function rsvpConversation(
     return;
   }
 
-  // Extract event ID from start param
+  // Extract event ID and token from start param
   const startPayload = ctx.match;
   if (typeof startPayload !== "string" || !startPayload.startsWith("rsvp_")) {
     await ctx.reply("Invalid RSVP link.");
     return;
   }
 
-  const eventId = startPayload.replace("rsvp_", "");
-  const event = await conversation.external(() => getEventById(eventId));
+  const parsed = parseEventPayload(startPayload);
+  if (!parsed) {
+    await ctx.reply("Invalid RSVP link.");
+    return;
+  }
+
+  const { eventId, token } = parsed;
+  const event = await conversation.external(() => getEventByIdAndToken(eventId, token));
 
   if (!event) {
-    await ctx.reply("Event not found.");
+    await ctx.reply("Event not found or invalid link.");
     return;
   }
 
