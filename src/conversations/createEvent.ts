@@ -1,7 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import { createEvent } from "../db/events.js";
 import { upsertUser } from "../db/users.js";
-import { fmt, bold, italic, FormattedString } from "../utils/format.js";
+import { fmt, bold, italic } from "../utils/format.js";
 import type { FoodMode } from "../types.js";
 import type { BotContext, BotConversation } from "../context.js";
 
@@ -106,28 +106,17 @@ export async function createEventConversation(
     })
   );
 
-  // Show summary - user input is safely escaped via FormattedString
-  const summaryParts: FormattedString[] = [
-    FormattedString.bold(event.title),
-  ];
-  if (event.description) {
-    summaryParts.push(FormattedString.italic(event.description));
-  }
-  if (event.location) {
-    summaryParts.push(new FormattedString(`Location: ${event.location}`));
-  }
-  if (event.event_date) {
-    summaryParts.push(new FormattedString(`Date: ${event.event_date.toLocaleString()}`));
-  }
-  summaryParts.push(new FormattedString(
-    event.max_attendees ? `Max: ${event.max_attendees} people` : "No limit"
-  ));
-  summaryParts.push(new FormattedString(`Food: ${event.food_mode}`));
+  // Show summary - user input is safely escaped via template tags
+  const descLine = event.description ? fmt`${italic()}${event.description}${italic()}\n` : fmt``;
+  const locLine = event.location ? fmt`Location: ${event.location}\n` : fmt``;
+  const dateLine = event.event_date ? fmt`Date: ${event.event_date.toLocaleString()}\n` : fmt``;
+  const maxLine = event.max_attendees ? `Max: ${event.max_attendees} people` : "No limit";
 
-  const summary = FormattedString.join(
-    [new FormattedString("Event created!\n\n"), ...summaryParts],
-    "\n"
-  );
+  const summary = fmt`Event created!
+
+${bold()}${event.title}${bold()}
+${descLine}${locLine}${dateLine}${maxLine}
+Food: ${event.food_mode}`;
 
   const adminKeyboard = new InlineKeyboard()
     .text("Edit", `edit_${event.id}_${event.share_token}`)
