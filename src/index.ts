@@ -4,7 +4,9 @@ import "dotenv/config";
 
 import type { BotContext, SessionData } from "./context.js";
 import { createEventConversation } from "./conversations/createEvent.js";
+import { rsvpConversation } from "./conversations/rsvp.js";
 import { handleInlineQuery } from "./handlers/inline.js";
+import { handleCallbackQuery } from "./handlers/callbacks.js";
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -21,15 +23,28 @@ bot.use(
 );
 bot.use(conversations());
 bot.use(createConversation(createEventConversation));
+bot.use(createConversation(rsvpConversation));
 
 // Commands
-bot.command("start", (ctx) =>
-  ctx.reply(
+bot.command("start", async (ctx) => {
+  const payload = ctx.match;
+
+  if (typeof payload === "string" && payload.startsWith("rsvp_")) {
+    await ctx.conversation.enter("rsvpConversation");
+    return;
+  }
+
+  if (payload === "create") {
+    await ctx.conversation.enter("createEventConversation");
+    return;
+  }
+
+  await ctx.reply(
     "Welcome to Potluck Bot!\n\n" +
       "Use /create to create a new event.\n" +
       "Use @YourBotName in any chat to share events."
-  )
-);
+  );
+});
 
 bot.command("create", async (ctx) => {
   await ctx.conversation.enter("createEventConversation");
@@ -37,6 +52,9 @@ bot.command("create", async (ctx) => {
 
 // Inline query handler
 bot.on("inline_query", handleInlineQuery);
+
+// Callback query handler
+bot.on("callback_query:data", handleCallbackQuery);
 
 bot.start();
 console.log("Bot started");
