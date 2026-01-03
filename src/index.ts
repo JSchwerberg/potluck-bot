@@ -7,6 +7,7 @@ import { createEventConversation } from "./conversations/createEvent.js";
 import { rsvpConversation } from "./conversations/rsvp.js";
 import { handleInlineQuery } from "./handlers/inline.js";
 import { handleCallbackQuery } from "./handlers/callbacks.js";
+import { sendEventDetails } from "./handlers/details.js";
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -31,6 +32,12 @@ bot.command("start", async (ctx) => {
 
   if (typeof payload === "string" && payload.startsWith("rsvp_")) {
     await ctx.conversation.enter("rsvpConversation");
+    return;
+  }
+
+  if (typeof payload === "string" && payload.startsWith("details_")) {
+    const eventId = payload.replace("details_", "");
+    await sendEventDetails(ctx, eventId);
     return;
   }
 
