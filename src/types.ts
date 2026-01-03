@@ -61,14 +61,6 @@ export interface DishWithAllergens extends Dish {
   allergens: Allergen[];
 }
 
-export interface DishSlot {
-  id: string;
-  event_id: string;
-  category: string;
-  max_count: number | null;
-  created_at: Date;
-}
-
 export const DISH_CATEGORIES = [
   "main",
   "side",
