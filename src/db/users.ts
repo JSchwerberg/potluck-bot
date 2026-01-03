@@ -25,3 +25,12 @@ export async function getUserById(tgId: number): Promise<User | null> {
   );
   return result.rows[0] ?? null;
 }
+
+export async function getUsersByIds(ids: number[]): Promise<Map<number, User>> {
+  if (ids.length === 0) return new Map();
+  const result = await query<User>(
+    "SELECT * FROM users WHERE tg_id = ANY($1)",
+    [ids]
+  );
+  return new Map(result.rows.map(u => [Number(u.tg_id), u]));
+}

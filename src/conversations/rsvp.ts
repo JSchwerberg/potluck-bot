@@ -1,9 +1,12 @@
 import { InlineKeyboard } from "grammy";
 import { getEventById } from "../db/events.js";
-import { upsertRsvp, addDish, getAttendeeCount, getAllAllergens } from "../db/rsvps.js";
+import { upsertRsvp, addDish, getAttendeeCount, getAllAllergens, getRsvp } from "../db/rsvps.js";
 import { upsertUser } from "../db/users.js";
+import { fmt, bold, italic, FormattedString } from "../utils/format.js";
 import { DISH_CATEGORIES, type RsvpStatus } from "../types.js";
 import type { BotContext, BotConversation } from "../context.js";
+
+const MAX_GUESTS = 20;
 
 export async function rsvpConversation(
   conversation: BotConversation,
@@ -30,13 +33,21 @@ export async function rsvpConversation(
     return;
   }
 
+  // Check event status - reject if not active
+  if (event.status !== "active") {
+    await ctx.reply("This event is no longer accepting RSVPs.");
+    return;
+  }
+
   // Ensure user exists
   await conversation.external(() =>
     upsertUser(user.id, user.username ?? null, user.first_name)
   );
 
-  // Check capacity
+  // Check capacity and existing RSVP
   const currentCount = await conversation.external(() => getAttendeeCount(eventId));
+  const existingRsvp = await conversation.external(() => getRsvp(eventId, user.id));
+  const existingCount = existingRsvp?.status === "going" ? 1 + existingRsvp.guest_count : 0;
   const isFull = event.max_attendees !== null && currentCount >= event.max_attendees;
 
   // Step 1: Status
@@ -46,10 +57,16 @@ export async function rsvpConversation(
     .text("Maybe", "status_maybe")
     .text("Can't make it", "status_declined");
 
-  await ctx.reply(
-    `*${event.title}*\n\nAre you coming?${isFull ? "\n\n_Note: Event is full, you may be waitlisted_" : ""}`,
-    { reply_markup: statusKeyboard, parse_mode: "Markdown" }
-  );
+  const titlePrompt = fmt`${bold()}${event.title}${bold()}
+
+Are you coming?${isFull ? fmt`
+
+${italic()}Note: Event is full, you may be waitlisted${italic()}` : ""}`;
+
+  await ctx.reply(titlePrompt.text, {
+    reply_markup: statusKeyboard,
+    entities: titlePrompt.entities,
+  });
 
   const statusCtx = await conversation.waitFor("callback_query:data");
   const statusData = statusCtx.callbackQuery.data;
@@ -77,12 +94,35 @@ export async function rsvpConversation(
 
     if (guestData === "guests_more") {
       await guestCtx.answerCallbackQuery();
-      await ctx.reply("How many guests? (Enter a number)");
+      await ctx.reply(`How many guests? (Enter a number between 0 and ${MAX_GUESTS})`);
       const numCtx = await conversation.waitFor("message:text");
-      guestCount = parseInt(numCtx.message.text, 10) || 0;
+      const parsed = parseInt(numCtx.message.text, 10);
+      
+      // Validate guest count
+      if (isNaN(parsed) || parsed < 0 || parsed > MAX_GUESTS) {
+        await ctx.reply(`Invalid number. Using 0 guests.`);
+        guestCount = 0;
+      } else {
+        guestCount = parsed;
+      }
     } else {
       guestCount = parseInt(guestData.replace("guests_", ""), 10);
       await guestCtx.answerCallbackQuery();
+    }
+  }
+
+  // Enforce capacity for "going" status
+  if (status === "going" && event.max_attendees !== null) {
+    const projectedCount = currentCount - existingCount + 1 + guestCount;
+    if (projectedCount > event.max_attendees) {
+      const spotsLeft = Math.max(0, event.max_attendees - (currentCount - existingCount) - 1);
+      await ctx.reply(
+        `Sorry, this event is full. ` +
+        (spotsLeft > 0 
+          ? `You can bring at most ${spotsLeft} guest${spotsLeft === 1 ? "" : "s"}, or RSVP as "Maybe".`
+          : `You can RSVP as "Maybe" to be notified if spots open up.`)
+      );
+      return;
     }
   }
 
@@ -109,7 +149,7 @@ export async function rsvpConversation(
     // Step 4: Dish description
     await ctx.reply(`What ${category} dish? (e.g., "Spicy Wings", "Caesar Salad")`);
     const dishCtx = await conversation.waitFor("message:text");
-    const description = dishCtx.message.text;
+    const dishDescription = dishCtx.message.text;
 
     // Step 5: Allergens - fetch from database
     const allAllergens = await conversation.external(() => getAllAllergens());
@@ -165,16 +205,17 @@ export async function rsvpConversation(
     }
 
     await conversation.external(() =>
-      addDish(rsvp.id, category, description, selectedAllergenIds)
+      addDish(rsvp.id, category, dishDescription, selectedAllergenIds)
     );
   }
 
-  // Confirmation
+  // Confirmation - user input is safely escaped
   const statusEmoji = status === "going" ? "Yes" : "Maybe";
   const guestStr = guestCount > 0 ? ` (+${guestCount} guest${guestCount > 1 ? "s" : ""})` : "";
 
-  await ctx.reply(
-    `You're all set for *${event.title}*!\n\nStatus: ${statusEmoji}${guestStr}`,
-    { parse_mode: "Markdown" }
-  );
+  const confirmation = fmt`You're all set for ${bold()}${event.title}${bold()}!
+
+Status: ${statusEmoji}${guestStr}`;
+
+  await ctx.reply(confirmation.text, { entities: confirmation.entities });
 }

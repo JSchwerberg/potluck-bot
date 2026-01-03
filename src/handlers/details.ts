@@ -1,8 +1,9 @@
 import type { BotContext } from "../context.js";
 import { getEventById } from "../db/events.js";
 import { getRsvpsForEvent, getDishesForEvent } from "../db/rsvps.js";
-import { getUserById } from "../db/users.js";
-import type { Rsvp, DishWithAllergens } from "../types.js";
+import { getUsersByIds } from "../db/users.js";
+import { FormattedString } from "../utils/format.js";
+import type { Rsvp, DishWithAllergens, User } from "../types.js";
 
 export async function sendEventDetails(ctx: BotContext, eventId: string) {
   const event = await getEventById(eventId);
@@ -14,16 +15,21 @@ export async function sendEventDetails(ctx: BotContext, eventId: string) {
   const rsvps = await getRsvpsForEvent(eventId);
   const dishes = await getDishesForEvent(eventId);
 
+  // Batch fetch all users to avoid N+1 queries
+  const userIds = rsvps.map(r => r.user_id);
+  const usersMap = await getUsersByIds(userIds);
+
   const goingRsvps = rsvps.filter((r) => r.status === "going");
   const maybeRsvps = rsvps.filter((r) => r.status === "maybe");
 
-  // Build attendee section
-  const buildAttendeeList = async (
-    rsvpList: Rsvp[]
-  ): Promise<string[]> => {
+  // Build attendee section - now uses batched user map
+  const buildAttendeeList = (
+    rsvpList: Rsvp[],
+    users: Map<number, User>
+  ): string[] => {
     const lines: string[] = [];
     for (const rsvp of rsvpList) {
-      const user = await getUserById(rsvp.user_id);
+      const user = users.get(rsvp.user_id);
       const name = user?.display_name ?? user?.username ?? `User ${rsvp.user_id}`;
       const guestStr = rsvp.guest_count > 0 ? ` (+${rsvp.guest_count})` : "";
       const userDishes = dishes.filter((d) => d.rsvp_id === rsvp.id);
@@ -40,8 +46,8 @@ export async function sendEventDetails(ctx: BotContext, eventId: string) {
     return lines;
   };
 
-  const goingLines = await buildAttendeeList(goingRsvps);
-  const maybeLines = await buildAttendeeList(maybeRsvps);
+  const goingLines = buildAttendeeList(goingRsvps, usersMap);
+  const maybeLines = buildAttendeeList(maybeRsvps, usersMap);
 
   // Build menu summary
   const categoryCounts: Record<string, number> = {};
@@ -57,19 +63,22 @@ export async function sendEventDetails(ctx: BotContext, eventId: string) {
   const totalMaybe =
     maybeRsvps.reduce((sum, r) => sum + 1 + r.guest_count, 0);
 
-  const text = [
-    `*${event.title}*`,
-    "",
-    `*Going (${totalGoing}):*`,
-    goingLines.length > 0 ? goingLines.join("\n") : "_None yet_",
-    "",
-    `*Maybe (${totalMaybe}):*`,
-    maybeLines.length > 0 ? maybeLines.join("\n") : "_None_",
-    "",
-    `*Menu:* ${menuSummary || "No dishes yet"}`,
-  ].join("\n");
+  // Build formatted output - user content safely escaped via FormattedString
+  const parts: FormattedString[] = [
+    FormattedString.bold(event.title),
+    new FormattedString(""),
+    FormattedString.bold(`Going (${totalGoing}):`),
+    new FormattedString(goingLines.length > 0 ? goingLines.join("\n") : "None yet"),
+    new FormattedString(""),
+    FormattedString.bold(`Maybe (${totalMaybe}):`),
+    new FormattedString(maybeLines.length > 0 ? maybeLines.join("\n") : "None"),
+    new FormattedString(""),
+    new FormattedString("").bold("Menu:").plain(` ${menuSummary || "No dishes yet"}`),
+  ];
 
-  await ctx.reply(text, { parse_mode: "Markdown" });
+  const formatted = FormattedString.join(parts, "\n");
+
+  await ctx.reply(formatted.text, { entities: formatted.entities });
 }
 
 function formatAllergenTags(dish: DishWithAllergens): string {
