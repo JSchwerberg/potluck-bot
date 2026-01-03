@@ -41,12 +41,23 @@ export interface Dish {
   rsvp_id: string;
   category: string;
   description: string;
-  is_vegan: boolean;
-  is_vegetarian: boolean;
-  is_gluten_free: boolean;
-  contains_nuts: boolean;
-  contains_dairy: boolean;
   created_at: Date;
+}
+
+export interface Allergen {
+  id: number;
+  name: string;
+  display_name: string;
+  is_dietary_preference: boolean;
+}
+
+export interface DishAllergen {
+  dish_id: string;
+  allergen_id: number;
+}
+
+export interface DishWithAllergens extends Dish {
+  allergens: Allergen[];
 }
 
 export interface DishSlot {
