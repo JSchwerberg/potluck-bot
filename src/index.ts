@@ -4,6 +4,7 @@ import "dotenv/config";
 
 import type { BotContext, SessionData } from "./context.js";
 import { createEventConversation } from "./conversations/createEvent.js";
+import { handleInlineQuery } from "./handlers/inline.js";
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -33,6 +34,9 @@ bot.command("start", (ctx) =>
 bot.command("create", async (ctx) => {
   await ctx.conversation.enter("createEventConversation");
 });
+
+// Inline query handler
+bot.on("inline_query", handleInlineQuery);
 
 bot.start();
 console.log("Bot started");
