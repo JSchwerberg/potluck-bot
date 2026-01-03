@@ -2,7 +2,7 @@ import type { BotContext } from "../context.js";
 import { getEventByIdAndToken } from "../db/events.js";
 import { getRsvpsForEvent, getDishesForEvent } from "../db/rsvps.js";
 import { getUsersByIds } from "../db/users.js";
-import { FormattedString } from "../utils/format.js";
+import { fmt, bold } from "../utils/format.js";
 import type { Rsvp, DishWithAllergens, User } from "../types.js";
 
 export async function sendEventDetails(
@@ -67,20 +67,20 @@ export async function sendEventDetails(
   const totalMaybe =
     maybeRsvps.reduce((sum, r) => sum + 1 + r.guest_count, 0);
 
-  // Build formatted output - user content safely escaped via FormattedString
-  const parts: FormattedString[] = [
-    FormattedString.bold(event.title),
-    new FormattedString(""),
-    FormattedString.bold(`Going (${totalGoing}):`),
-    new FormattedString(goingLines.length > 0 ? goingLines.join("\n") : "None yet"),
-    new FormattedString(""),
-    FormattedString.bold(`Maybe (${totalMaybe}):`),
-    new FormattedString(maybeLines.length > 0 ? maybeLines.join("\n") : "None"),
-    new FormattedString(""),
-    new FormattedString("").bold("Menu:").plain(` ${menuSummary || "No dishes yet"}`),
-  ];
+  // Build formatted output using template tags
+  const goingList = goingLines.length > 0 ? goingLines.join("\n") : "None yet";
+  const maybeList = maybeLines.length > 0 ? maybeLines.join("\n") : "None";
+  const menu = menuSummary || "No dishes yet";
 
-  const formatted = FormattedString.join(parts, "\n");
+  const formatted = fmt`${bold()}${event.title}${bold()}
+
+${bold()}Going (${totalGoing}):${bold()}
+${goingList}
+
+${bold()}Maybe (${totalMaybe}):${bold()}
+${maybeList}
+
+${bold()}Menu:${bold()} ${menu}`;
 
   await ctx.reply(formatted.text, { entities: formatted.entities });
 }

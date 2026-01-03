@@ -2,7 +2,7 @@ import { InlineKeyboard } from "grammy";
 import type { MessageEntity } from "grammy/types";
 import { getEventsByCreator } from "../db/events.js";
 import { getAttendeeCount } from "../db/rsvps.js";
-import { FormattedString } from "../utils/format.js";
+import { fmt, bold, italic } from "../utils/format.js";
 import type { Event } from "../types.js";
 import type { BotContext } from "../context.js";
 
@@ -10,34 +10,19 @@ export function buildEventCard(
   event: Event,
   attendeeCount: number
 ): { text: string; entities: MessageEntity[]; keyboard: InlineKeyboard } {
-  // Build formatted text using FormattedString to safely escape user input
-  const parts: FormattedString[] = [
-    FormattedString.bold(event.title),
-  ];
-  
-  if (event.description) {
-    parts.push(FormattedString.italic(event.description));
-  }
-  
-  parts.push(new FormattedString("")); // empty line
-  
-  if (event.location) {
-    parts.push(new FormattedString(`Location: ${event.location}`));
-  }
-  
-  if (event.event_date) {
-    const dateStr = `${event.event_date.toLocaleDateString()} ${event.event_date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-    parts.push(new FormattedString(`Date: ${dateStr}`));
-  }
-  
-  parts.push(new FormattedString("")); // empty line
-  
+  // Build formatted text using template tags to safely escape user input
+  const descLine = event.description ? fmt`${italic()}${event.description}${italic()}\n` : fmt``;
+  const locLine = event.location ? fmt`Location: ${event.location}\n` : fmt``;
+  const dateLine = event.event_date
+    ? fmt`Date: ${event.event_date.toLocaleDateString()} ${event.event_date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}\n`
+    : fmt``;
   const spotsText = event.max_attendees
     ? `Spots: ${attendeeCount}/${event.max_attendees}`
     : `Attendees: ${attendeeCount}`;
-  parts.push(new FormattedString(spotsText));
 
-  const formatted = FormattedString.join(parts, "\n");
+  const formatted = fmt`${bold()}${event.title}${bold()}
+${descLine}${locLine}${dateLine}
+${spotsText}`;
 
   const keyboard = new InlineKeyboard()
     .text("RSVP", `rsvp_${event.id}_${event.share_token}`)

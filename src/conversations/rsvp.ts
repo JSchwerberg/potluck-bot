@@ -2,7 +2,7 @@ import { InlineKeyboard } from "grammy";
 import { getEventByIdAndToken } from "../db/events.js";
 import { upsertRsvp, addDish, getAttendeeCount, getAllAllergens, getRsvp } from "../db/rsvps.js";
 import { upsertUser } from "../db/users.js";
-import { fmt, bold, italic, FormattedString } from "../utils/format.js";
+import { fmt, bold, italic } from "../utils/format.js";
 import { DISH_CATEGORIES, type RsvpStatus } from "../types.js";
 import type { BotContext, BotConversation } from "../context.js";
 
