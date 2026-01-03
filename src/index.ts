@@ -8,6 +8,7 @@ import { rsvpConversation } from "./conversations/rsvp.js";
 import { handleInlineQuery } from "./handlers/inline.js";
 import { handleCallbackQuery } from "./handlers/callbacks.js";
 import { sendEventDetails } from "./handlers/details.js";
+import { pool } from "./db/index.js";
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -36,8 +37,16 @@ bot.command("start", async (ctx) => {
   }
 
   if (typeof payload === "string" && payload.startsWith("details_")) {
-    const eventId = payload.replace("details_", "");
-    await sendEventDetails(ctx, eventId);
+    // Parse eventId and token from payload like "details_uuid_token"
+    const data = payload.replace("details_", "");
+    const lastUnderscore = data.lastIndexOf("_");
+    if (lastUnderscore === -1) {
+      await ctx.reply("Invalid link.");
+      return;
+    }
+    const eventId = data.substring(0, lastUnderscore);
+    const token = data.substring(lastUnderscore + 1);
+    await sendEventDetails(ctx, eventId, token);
     return;
   }
 
@@ -62,6 +71,18 @@ bot.on("inline_query", handleInlineQuery);
 
 // Callback query handler
 bot.on("callback_query:data", handleCallbackQuery);
+
+// Graceful shutdown
+async function shutdown(signal: string) {
+  console.log(`\n${signal} received, shutting down gracefully...`);
+  bot.stop();
+  await pool.end();
+  console.log("Shutdown complete");
+  process.exit(0);
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 bot.start();
 console.log("Bot started");

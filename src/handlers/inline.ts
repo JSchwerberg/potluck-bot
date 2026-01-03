@@ -1,32 +1,49 @@
 import { InlineKeyboard } from "grammy";
+import type { MessageEntity } from "grammy/types";
 import { getEventsByCreator } from "../db/events.js";
 import { getAttendeeCount } from "../db/rsvps.js";
+import { FormattedString } from "../utils/format.js";
 import type { Event } from "../types.js";
 import type { BotContext } from "../context.js";
 
 export function buildEventCard(
   event: Event,
   attendeeCount: number
-): { text: string; keyboard: InlineKeyboard } {
-  const lines = [
-    `*${event.title}*`,
-    event.description ? `_${event.description}_` : null,
-    "",
-    event.location ? `Location: ${event.location}` : null,
-    event.event_date
-      ? `Date: ${event.event_date.toLocaleDateString()} ${event.event_date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-      : null,
-    "",
-    event.max_attendees
-      ? `Spots: ${attendeeCount}/${event.max_attendees}`
-      : `Attendees: ${attendeeCount}`,
-  ].filter((line) => line !== null);
+): { text: string; entities: MessageEntity[]; keyboard: InlineKeyboard } {
+  // Build formatted text using FormattedString to safely escape user input
+  const parts: FormattedString[] = [
+    FormattedString.bold(event.title),
+  ];
+  
+  if (event.description) {
+    parts.push(FormattedString.italic(event.description));
+  }
+  
+  parts.push(new FormattedString("")); // empty line
+  
+  if (event.location) {
+    parts.push(new FormattedString(`Location: ${event.location}`));
+  }
+  
+  if (event.event_date) {
+    const dateStr = `${event.event_date.toLocaleDateString()} ${event.event_date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    parts.push(new FormattedString(`Date: ${dateStr}`));
+  }
+  
+  parts.push(new FormattedString("")); // empty line
+  
+  const spotsText = event.max_attendees
+    ? `Spots: ${attendeeCount}/${event.max_attendees}`
+    : `Attendees: ${attendeeCount}`;
+  parts.push(new FormattedString(spotsText));
+
+  const formatted = FormattedString.join(parts, "\n");
 
   const keyboard = new InlineKeyboard()
-    .text("RSVP", `rsvp_${event.id}`)
-    .text("View Details", `details_${event.id}`);
+    .text("RSVP", `rsvp_${event.id}_${event.share_token}`)
+    .text("View Details", `details_${event.id}_${event.share_token}`);
 
-  return { text: lines.join("\n"), keyboard };
+  return { text: formatted.text, entities: formatted.entities, keyboard };
 }
 
 export async function handleInlineQuery(ctx: BotContext) {
@@ -46,7 +63,7 @@ export async function handleInlineQuery(ctx: BotContext) {
   const results = await Promise.all(
     events.map(async (event) => {
       const count = await getAttendeeCount(event.id);
-      const { text } = buildEventCard(event, count);
+      const { text, entities } = buildEventCard(event, count);
 
       return {
         type: "article" as const,
@@ -55,11 +72,11 @@ export async function handleInlineQuery(ctx: BotContext) {
         description: event.description ?? `${count} attending`,
         input_message_content: {
           message_text: text,
-          parse_mode: "Markdown" as const,
+          entities: entities,
         },
         reply_markup: new InlineKeyboard()
-          .text("RSVP", `rsvp_${event.id}`)
-          .text("View Details", `details_${event.id}`),
+          .text("RSVP", `rsvp_${event.id}_${event.share_token}`)
+          .text("View Details", `details_${event.id}_${event.share_token}`),
       };
     })
   );

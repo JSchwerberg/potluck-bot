@@ -1,6 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import { createEvent } from "../db/events.js";
 import { upsertUser } from "../db/users.js";
+import { fmt, bold, italic, FormattedString } from "../utils/format.js";
 import type { FoodMode } from "../types.js";
 import type { BotContext, BotConversation } from "../context.js";
 
@@ -31,7 +32,10 @@ export async function createEventConversation(
   );
   let description: string | undefined;
   const descCtx = await conversation.wait();
-  if (descCtx.message?.text && descCtx.message.text !== "/skip") {
+  if (descCtx.callbackQuery?.data === "skip_desc") {
+    await descCtx.answerCallbackQuery();
+    // description stays undefined
+  } else if (descCtx.message?.text && descCtx.message.text !== "/skip") {
     description = descCtx.message.text;
   }
 
@@ -78,12 +82,13 @@ export async function createEventConversation(
   const foodKeyboard = new InlineKeyboard()
     .text("Categories (flexible)", "food_categories")
     .text("Slots (strict)", "food_slots");
-  await ctx.reply(
-    "How should food be organized?\n" +
-      "- *Categories*: People pick a category (Main, Side, etc.)\n" +
-      "- *Slots*: You define exactly what's needed",
-    { reply_markup: foodKeyboard, parse_mode: "Markdown" }
-  );
+  const foodPrompt = fmt`How should food be organized?
+- ${bold()}Categories${bold()}: People pick a category (Main, Side, etc.)
+- ${bold()}Slots${bold()}: You define exactly what's needed`;
+  await ctx.reply(foodPrompt.text, {
+    reply_markup: foodKeyboard,
+    entities: foodPrompt.entities,
+  });
   const foodCtx = await conversation.waitFor("callback_query:data");
   const foodMode: FoodMode = foodCtx.callbackQuery.data === "food_slots" ? "slots" : "categories";
   await foodCtx.answerCallbackQuery();
@@ -101,24 +106,35 @@ export async function createEventConversation(
     })
   );
 
-  // Show summary
-  const summary = [
-    `*${event.title}*`,
-    event.description ? `_${event.description}_` : null,
-    event.location ? `Location: ${event.location}` : null,
-    event.event_date ? `Date: ${event.event_date.toLocaleString()}` : null,
-    event.max_attendees ? `Max: ${event.max_attendees} people` : "No limit",
-    `Food: ${event.food_mode}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  // Show summary - user input is safely escaped via FormattedString
+  const summaryParts: FormattedString[] = [
+    FormattedString.bold(event.title),
+  ];
+  if (event.description) {
+    summaryParts.push(FormattedString.italic(event.description));
+  }
+  if (event.location) {
+    summaryParts.push(new FormattedString(`Location: ${event.location}`));
+  }
+  if (event.event_date) {
+    summaryParts.push(new FormattedString(`Date: ${event.event_date.toLocaleString()}`));
+  }
+  summaryParts.push(new FormattedString(
+    event.max_attendees ? `Max: ${event.max_attendees} people` : "No limit"
+  ));
+  summaryParts.push(new FormattedString(`Food: ${event.food_mode}`));
+
+  const summary = FormattedString.join(
+    [new FormattedString("Event created!\n\n"), ...summaryParts],
+    "\n"
+  );
 
   const adminKeyboard = new InlineKeyboard()
-    .text("Edit", `edit_${event.id}`)
-    .text("Share", `share_${event.id}`);
+    .text("Edit", `edit_${event.id}_${event.share_token}`)
+    .text("Share", `share_${event.id}_${event.share_token}`);
 
-  await ctx.reply(`Event created!\n\n${summary}`, {
+  await ctx.reply(summary.text, {
     reply_markup: adminKeyboard,
-    parse_mode: "Markdown",
+    entities: summary.entities,
   });
 }

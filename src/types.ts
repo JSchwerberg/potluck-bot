@@ -19,6 +19,7 @@ export interface Event {
   allow_guests: boolean;
   food_mode: FoodMode;
   status: EventStatus;
+  share_token: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -58,14 +59,6 @@ export interface DishAllergen {
 
 export interface DishWithAllergens extends Dish {
   allergens: Allergen[];
-}
-
-export interface DishSlot {
-  id: string;
-  event_id: string;
-  category: string;
-  max_count: number | null;
-  created_at: Date;
 }
 
 export const DISH_CATEGORIES = [

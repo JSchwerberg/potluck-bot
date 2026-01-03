@@ -1,7 +1,18 @@
 import type { BotContext } from "../context.js";
-import { getEventById } from "../db/events.js";
-import { getRsvpsForEvent, getDishesForEvent } from "../db/rsvps.js";
-import { getUserById } from "../db/users.js";
+import { getEventByIdAndToken } from "../db/events.js";
+
+// Parse event ID and token from callback data like "rsvp_uuid_token"
+function parseEventData(data: string, prefix: string): { eventId: string; token: string } | null {
+  const payload = data.replace(prefix, "");
+  const lastUnderscore = payload.lastIndexOf("_");
+  if (lastUnderscore === -1) return null;
+  
+  const eventId = payload.substring(0, lastUnderscore);
+  const token = payload.substring(lastUnderscore + 1);
+  
+  if (!eventId || !token) return null;
+  return { eventId, token };
+}
 
 export async function handleCallbackQuery(ctx: BotContext) {
   const data = ctx.callbackQuery?.data;
@@ -9,28 +20,43 @@ export async function handleCallbackQuery(ctx: BotContext) {
 
   // RSVP button -> redirect to PM
   if (data.startsWith("rsvp_")) {
-    const eventId = data.replace("rsvp_", "");
-    const botInfo = await ctx.api.getMe();
-    const deepLink = `https://t.me/${botInfo.username}?start=rsvp_${eventId}`;
+    const parsed = parseEventData(data, "rsvp_");
+    if (!parsed) {
+      await ctx.answerCallbackQuery({ text: "Invalid link", show_alert: true });
+      return;
+    }
 
-    await ctx.answerCallbackQuery({
-      url: deepLink,
-    });
+    // Validate token before redirecting
+    const event = await getEventByIdAndToken(parsed.eventId, parsed.token);
+    if (!event) {
+      await ctx.answerCallbackQuery({ text: "Event not found or invalid link", show_alert: true });
+      return;
+    }
+
+    const botInfo = await ctx.api.getMe();
+    const deepLink = `https://t.me/${botInfo.username}?start=rsvp_${parsed.eventId}_${parsed.token}`;
+
+    await ctx.answerCallbackQuery({ url: deepLink });
     return;
   }
 
   // View Details button -> redirect to PM
   if (data.startsWith("details_")) {
-    const eventId = data.replace("details_", "");
-    const event = await getEventById(eventId);
+    const parsed = parseEventData(data, "details_");
+    if (!parsed) {
+      await ctx.answerCallbackQuery({ text: "Invalid link", show_alert: true });
+      return;
+    }
 
+    // Validate token before redirecting
+    const event = await getEventByIdAndToken(parsed.eventId, parsed.token);
     if (!event) {
-      await ctx.answerCallbackQuery({ text: "Event not found", show_alert: true });
+      await ctx.answerCallbackQuery({ text: "Event not found or invalid link", show_alert: true });
       return;
     }
 
     const botInfo = await ctx.api.getMe();
-    const deepLink = `https://t.me/${botInfo.username}?start=details_${eventId}`;
+    const deepLink = `https://t.me/${botInfo.username}?start=details_${parsed.eventId}_${parsed.token}`;
 
     await ctx.answerCallbackQuery({ url: deepLink });
     return;
